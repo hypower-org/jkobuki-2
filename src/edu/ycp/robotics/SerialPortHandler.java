@@ -8,6 +8,7 @@ package edu.ycp.robotics;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.locks.ReentrantLock;
 
 import jssc.SerialPort;
 import jssc.SerialPortEvent;
@@ -49,6 +50,8 @@ public class SerialPortHandler implements SerialPortEventListener {
 		
 		int inputSize = 0;
 		
+		//Ensure that we can read what's on the line
+		
 		if(e.isRXCHAR()) {			
 			inputSize = e.getEventValue();	
 			ByteBuffer b = ByteBuffer.allocate(inputSize);
@@ -57,6 +60,9 @@ public class SerialPortHandler implements SerialPortEventListener {
 				b.put(port.readBytes(inputSize));
 				
 				try {
+					
+					//If we're maxed out, don't put anything else in the buffer
+					
 					if(incoming.size() > capacity) {
 						System.err.println("Incoming queue capacity exceeded!  No more data will be received");
 					} else {
@@ -69,7 +75,7 @@ public class SerialPortHandler implements SerialPortEventListener {
 				System.err.println("Could not read from the serial port");
 				e1.printStackTrace();
 			}		
-		}		
+		}	
 	}
 	
 	/**
@@ -78,6 +84,8 @@ public class SerialPortHandler implements SerialPortEventListener {
 	 * @return The serial port data in a ByteBuffer.
 	 */
 	public final ByteBuffer receive() {
+		
+		//If we're actually connected to a serial port, take a value
 		
 		if(port != null) {			
 			
@@ -99,6 +107,8 @@ public class SerialPortHandler implements SerialPortEventListener {
 	 * @return The serial port data in a ByteBuffer.
 	 */
 	public final ByteBuffer receiveNB() {
+		
+		//Check to see if the buffer has anything in it before taking, avoids blocking 
 		
 		if(port != null) {	//Port isn't opened yet
 			
@@ -125,17 +135,18 @@ public class SerialPortHandler implements SerialPortEventListener {
 	 */
 	public final void send(ByteBuffer q) {
 		
+		//If the port is valid, write an array of bytes to the serial port
+		
 		if(port != null) {
 			try {
 				port.writeBytes(q.array());
 			} catch (SerialPortException e) {
 				System.err.println("There was an error writing to the serial port");
 				e.printStackTrace();
-			}
+			} 
 		} else {
 			throw new IllegalArgumentException("Port must be connected before data can be sent");
-		}
-		
+		}	
 	}
 
 	public int getCapacity() {

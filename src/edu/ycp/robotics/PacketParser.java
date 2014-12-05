@@ -3,42 +3,43 @@ package edu.ycp.robotics;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
-/**
- * NOT THREADSAFE
- * 
- * @author ug-research
- *
- */
-
 public class PacketParser {
-	
-	public enum State {
-		EMPTY,
-		PARTIAL,
-		VALID
-	}
 	
 	/*
 	 * Packet parsing is based on the Kobuki communications protocol that can be found at :
 	 * http://files.yujinrobot.com/kobuki/doxygen/html/enAppendixGuide.html
 	*/
 	
-	private final ByteBuffer currentPacket;
-	private State lastState = State.EMPTY;
+	public enum State {
+		EMPTY,
+		HEADER,
+		SIZE,
+		PARTIAL,
+		VALID
+	}
+
+	private final ByteBuffer packet;	 	//Internally stored packet
+	private Byte lastByte; 					//The last byte we read
+	private State state; 					//Our current parsing state
+	private int length; 					//The payload length of the current packet
+	
 	
 	public PacketParser() {
-		
-		currentPacket = ByteBuffer.allocate(200);
-	
+		packet = ByteBuffer.allocate(100);  //Allocate 150 bytes just to be sure that we never overflow
+		lastByte = 0;
+		state = State.EMPTY;
 	}
 	
+	
 	/**
-	 * Flushes the internal ByteBuffer
+	 * Flushes the internal ByteBuffer, clears it, and sets all remaining fields to 0.
 	 * 
 	 */
 	private void flush() {
-		currentPacket.clear();
-		Arrays.fill(currentPacket.array(), (byte) 0);
+		packet.clear();
+		Arrays.fill(packet.array(), (byte) 0);
+		lastByte = 0;
+		length = 0;
 	}
 	
 	/**
@@ -49,113 +50,130 @@ public class PacketParser {
 	 */
 	private boolean validatePacket(int length) {
 				
-		byte[] b = currentPacket.array();
+		byte[] b = packet.array();
 		
 		if(length > 0) {
 		
 			byte checksum = 0;
 			
-			for(int i = 2; i < length -1; i++) {
+			//Start on the second index to ignore headers
+			
+			for(int i = 2; i < length; i++) {
 				checksum ^= b[i];
 			}
 			
-			return (checksum == b[length - 1]);
+			return (checksum == 0);
 		} else {
 			return false;
 		}
 	}
 	
-	private int containsHeader(byte[] b) {
+	/**
+	 * Advances the internal state machine of the PacketParser.  
+	 * 
+	 * @param b The byte to be fed into the state machine.
+	 * @return	The state of the state machine given the input.
+	 */
+	public State advance(byte b) {
 		
-		for(int i = 0; i < b.length - 1; i++) {
-			if((b[i] == -86) && (b[i + 1] == 85)) {
-				return i;
-			}
-		}	
-		return -1;		
+		switch(state) {
+		
+			//If we have no bytes, we're looking for the first header byte.
+			
+			case EMPTY:
+				if(b == (byte) 0xAA) {
+					packet.put(b);
+					state = State.HEADER;
+				} else {
+					state = State.EMPTY;
+				}
+				break;
+				
+			//If we found the first header byte, look for the second one.
+				
+			case HEADER: 
+				if(b == (byte) 0x55) {
+					packet.put(b);
+					state = State.SIZE;
+				} else {
+					state = State.HEADER;
+				}
+				break;
+				
+			//Assume that the next non-zero incoming byte is the payload size.
+	
+			case SIZE:
+				if(b > 0) {
+					packet.put(b);
+					length = b + 4; //Account for two headers, payload size, and checksum.
+					state = State.PARTIAL;
+				} else {
+					state = State.SIZE;
+				}
+				break;			
+				
+				
+			case PARTIAL: 
+				
+				//If our last byte was header one and we just received header two, we need to flush and reset the state machine to the size state.
+				
+				if(lastByte == (byte) 0xAA && b == (byte) 0x55) {
+					flush();
+					state = State.SIZE;
+				} else {
+					
+					//If we haven't reached the number of bytes specified by the payload length...
+					
+					if(packet.position() < length) {
+						packet.put(b);
+						lastByte = b;
+						state = State.PARTIAL;
+					} else {
+						
+						//We have a number of bytes equal to that we expected.  Check to see if the packet is valid.  If not, reset the state machine to empty.
+						
+						packet.put(b);
+						if(validatePacket(length)) {
+							state = State.VALID;
+						} else {
+							flush();
+							state = State.EMPTY;
+						}
+					}			
+				}
+				break;
+			
+			default:
+				System.err.println("Something went very wrong in the PacketParser state machine");
+				break;		
+		}
+		
+		return state;	
 	}
 	
 	/**
-	 * Stores the incoming bytes in an internal array and return the state of the parser (e.g., EMPTY, PARTIAL, or VALID).
 	 * 
-	 * @param bytes The bytes to be added to the internal ByteBuffer.
-	 * @return The state of the current packet.
+	 * Returns the currently held packet and resets the state machine.  Should only be called once the VALID state has been reached 
+	 * 
+	 * @return The currently held packet
 	 */
-	public State checkPacket(ByteBuffer bytes) {
-		
-		System.out.println("POSITION: " + currentPacket.position());
-		
-		byte[] b = bytes.array().clone();
-		
-		int header = containsHeader(b);
-		
-		if((header > -1) && (lastState == State.PARTIAL)) {
-			System.out.println("RESET!");
-			flush();
-			System.arraycopy(b, header, b, 0, b.length - header);
-		}
-		
-		currentPacket.put(b);
-		
-		b = currentPacket.array();
-		
-		if((b[0] == -86 && lastState == State.VALID) || (b[0] == -86) && (b[1] == 85)) {
-						
-			int packetLength = b[2] + 5; //Add 4 to include: 2 header bytes, data size byte, and checksum byte
-			
-			System.out.println("PACKET LENGTH: " + packetLength);
-			
-			if(validatePacket(packetLength)) {
-				System.out.println("VALIDATED!");
-				if(currentPacket.position() >= packetLength - 1) {
-					System.out.println("VALID!");
-					lastState = State.VALID;
-				} else {
-					lastState = State.PARTIAL;
-				}
-			} else {
-				if(currentPacket.position() > packetLength + 5) {
-					System.out.println("FLUSHED!");
-					flush();
-					lastState = State.EMPTY;
-				} else {
-					lastState = State.PARTIAL;
-				}
-			}						
-		} else {
-			System.out.println("POOP!");
-			flush();
-			lastState = State.EMPTY;
-			return lastState;
-		}
-		
-		return lastState;
-	}	
-	
 	public byte[] getPacket() {
-		byte[] b = currentPacket.array().clone();
 		
-		int packetLength = b[2] + 4;
-		int position = currentPacket.position();
+		byte[] b = packet.array().clone();
 		
-		System.out.println("PL: " + packetLength + "EXTRA: " + position);
+		flush();
 		
-		if(position > packetLength) {	
-			
-			System.out.println("YAY EXTRA");
-			
-			int extra = currentPacket.position();
-			
-			flush();
-			
-			for(int i = extra + 1; i <= position; i++) {
-				currentPacket.put(b[i]);
-			}
-		} else {
-			
-			flush();
-		}
-		
+		state = State.EMPTY;
+				
 		return b;
+	}
+	
+	/**
+	 * Gets the state
+	 * 
+	 * @return The current state of the FSM
+	 */
+	public State getState() {
+		return state;
 	}
 }

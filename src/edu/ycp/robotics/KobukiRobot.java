@@ -10,6 +10,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import edu.ycp.robotics.PacketParser.State;
+
 public class KobukiRobot {
 	
 	private boolean stop = false;
@@ -18,7 +20,7 @@ public class KobukiRobot {
 	private final LinkedBlockingQueue<ByteBuffer> outgoing = new LinkedBlockingQueue<ByteBuffer>();
 	private final ScheduledExecutorService executor;
 	private final Vector<Future<?>> tasks;
-	private final int MIN_UPDATE_PERIOD = 21;
+	private final int MIN_UPDATE_PERIOD = 21; //in ms
 		
 	private final int WHEELBASE = 354; //in mm
 	private int leftEncoder;
@@ -26,42 +28,10 @@ public class KobukiRobot {
 	
 	public KobukiRobot(String path) {
 		
-//		Callable<Object> dataSender = new Callable<Object>() {
-//
-//			@Override
-//			public Object call() throws Exception {
-//				while(true) {
-//					try {
-//						handler.send(outgoing.take());
-//					} catch (InterruptedException e) {
-//						e.printStackTrace();
-//					}
-//				}
-//			}		
-//		};
-//		
-//		Callable<Object> dataReceiver = new Callable<Object>() {
-//
-//			@Override
-//			public Object call() throws Exception {
-//				while(true) {
-//					System.out.println("RECEIVING");
-//					ByteBuffer b = handler.receiveNB();
-//					if(b != null) {
-//						if(parser.checkPacket(b) == PacketParser.State.VALID) {
-//							updateSensors(parser.getPacket());
-//						} 
-//					} else {
-//						//Nothing
-//					}
-//				}	
-//			}	
-//		};
-		
-		Thread dataSender = new Thread() {
+		Callable<Object> dataSender = new Callable<Object>() {
 
 			@Override
-			public void run() {
+			public Object call() throws Exception {
 				while(true) {
 					try {
 						handler.send(outgoing.take());
@@ -72,24 +42,27 @@ public class KobukiRobot {
 			}		
 		};
 		
-		Thread dataReceiver = new Thread() {
+		Callable<Object> dataReceiver = new Callable<Object>() {
 
 			@Override
-			public void run() {
+			public Object call() throws Exception {
 				while(true) {
-					ByteBuffer b = handler.receiveNB();
+					ByteBuffer b = handler.receive();
 					if(b != null) {
-						if(parser.checkPacket(b) == PacketParser.State.VALID) {
-							updateSensors(parser.getPacket());
-						} 
+						byte[] ba = b.array().clone();
+						for(int i = 0; i < ba.length; i++) {
+							if(parser.advance(ba[i]) == State.VALID) {
+								updateSensors(parser.getPacket());
+							}
+						}
 					} else {
 						//Nothing
 					}
-				}	
+				}
 			}	
 		};
 		
-		Thread kobukiThreadManager = new Thread() {
+		Runnable kobukiThreadManager = new Runnable() {
 			
 			@Override
 			public void run() {
@@ -98,6 +71,7 @@ public class KobukiRobot {
 					System.out.println("Shutting down the KobukiRobot.");
 					try {
 						baseControl((short) 0, (short) 0);
+						
 						// Sleep a bit before killing the running tasks.
 						Thread.sleep(3*MIN_UPDATE_PERIOD);
 					} catch (IOException | InterruptedException e) {
@@ -122,13 +96,9 @@ public class KobukiRobot {
 		executor = Executors.newScheduledThreadPool(3);
 		tasks = new Vector<Future<?>>();
 		
-		 dataSender.start();
-		 dataReceiver.start();
-		 kobukiThreadManager.start();
-		
-//		tasks.add(executor.schedule(dataSender, 0, TimeUnit.MILLISECONDS));
-//		tasks.add(executor.schedule(dataReceiver, 0, TimeUnit.MILLISECONDS));
-//		tasks.add(executor.scheduleAtFixedRate(kobukiThreadManager, 0, MIN_UPDATE_PERIOD, TimeUnit.MILLISECONDS));
+		tasks.add(executor.schedule(dataSender, 0, TimeUnit.MILLISECONDS));
+		tasks.add(executor.schedule(dataReceiver, 0, TimeUnit.MILLISECONDS));
+		tasks.add(executor.scheduleAtFixedRate(kobukiThreadManager, 0, MIN_UPDATE_PERIOD, TimeUnit.MILLISECONDS));
 	}
 	
 	public void stop() {
@@ -137,8 +107,16 @@ public class KobukiRobot {
 	
 	private void updateSensors(byte[] b) {
 		
-		leftEncoder = ((short) (b[6] << 8) | (b[5] & 0xFF));
-		rightEncoder = ((short) (b[8] << 8) | (b[7] & 0xFF));
+//		for(int i = 0; i < b.length; i++) {
+//			System.out.print(b[i] + " ");
+//		}
+//		
+//		System.out.println();
+		
+		leftEncoder = ((b[11] & 0xFF) << 8) | (b[10] & 0xFF);
+		rightEncoder = ((b[13] & 0xFF) << 8) | (b[12] & 0xFF);
+		
+//		System.out.println("ENCODERS: " + leftEncoder + " " + rightEncoder);
 	}
 	
 	public void baseControl(short velocity, short radius) throws IOException, InterruptedException { 	
@@ -177,13 +155,17 @@ public class KobukiRobot {
 	}
 	
 	public static void main (String[] args) {
+		
+		//Small test to make sure everything important is working!
+		
 		KobukiRobot k = new KobukiRobot("/dev/ttyUSB0");
 		
 		while(true) {
 			
 			//System.out.println(k.getLeftEncoder() + " and " + k.getRightEncoder());
+			k.control(0, 0);
 			try {
-				Thread.sleep(1000);
+				Thread.sleep(1);
 			} catch (InterruptedException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
