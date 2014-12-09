@@ -107,16 +107,16 @@ public class KobukiRobot {
 	
 	private void updateSensors(byte[] b) {
 		
-		for(int i = 0; i < b.length; i++) {
-			System.out.print(b[i] + " ");
-		}
-		
-		System.out.println();
+//		for(int i = 0; i < b.length; i++) {
+//			System.out.print(b[i] + " ");
+//		}
+//		
+//		System.out.println();
 		
 		leftEncoder = ((b[11] & 0xFF) << 8) | (b[10] & 0xFF);
 		rightEncoder = ((b[13] & 0xFF) << 8) | (b[12] & 0xFF);
 		
-		System.out.println("ENCODERS: " + leftEncoder + " " + rightEncoder);
+//		System.out.println("ENCODERS: " + leftEncoder + " " + rightEncoder);
 	}
 	
 	public void baseControl(short velocity, short radius) throws IOException, InterruptedException { 	
@@ -165,7 +165,7 @@ public class KobukiRobot {
 			//System.out.println(k.getLeftEncoder() + " and " + k.getRightEncoder());
 			k.control(0, 0);
 			try {
-				Thread.sleep(1);
+				Thread.sleep(50);
 			} catch (InterruptedException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();

@@ -69,6 +69,7 @@ public class SerialPortHandler implements SerialPortEventListener {
 						incoming.put(b);
 					}
 				} catch (InterruptedException e1) {
+					System.err.println("Could not read from the serial port");
 					e1.printStackTrace();
 				}
 			} catch (SerialPortException e1) {

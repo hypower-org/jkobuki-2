@@ -49,7 +49,7 @@ public class PacketParser {
 	 * @return If the packet is valid (i.e., true/false).
 	 */
 	private boolean validatePacket(int length) {
-				
+		
 		byte[] b = packet.array();
 		
 		if(length > 0) {
@@ -81,6 +81,7 @@ public class PacketParser {
 			//If we have no bytes, we're looking for the first header byte.
 			
 			case EMPTY:
+				
 				if(b == (byte) 0xAA) {
 					packet.put(b);
 					state = State.HEADER;
@@ -92,6 +93,7 @@ public class PacketParser {
 			//If we found the first header byte, look for the second one.
 				
 			case HEADER: 
+				
 				if(b == (byte) 0x55) {
 					packet.put(b);
 					state = State.SIZE;
@@ -103,6 +105,7 @@ public class PacketParser {
 			//Assume that the next non-zero incoming byte is the payload size.
 	
 			case SIZE:
+				
 				if(b > 0) {
 					packet.put(b);
 					length = b + 4; //Account for two headers, payload size, and checksum.
@@ -115,10 +118,14 @@ public class PacketParser {
 				
 			case PARTIAL: 
 				
+				
 				//If our last byte was header one and we just received header two, we need to flush and reset the state machine to the size state.
 				
 				if(lastByte == (byte) 0xAA && b == (byte) 0x55) {
+					byte temp = lastByte;
 					flush();
+					packet.put(temp);
+					packet.put(b);
 					state = State.SIZE;
 				} else {
 					
