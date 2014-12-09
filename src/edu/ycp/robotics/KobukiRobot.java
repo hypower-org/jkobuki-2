@@ -167,7 +167,7 @@ public class KobukiRobot {
 		while(true) {
 			
 			System.out.println(k.getLeftEncoder() + " and " + k.getRightEncoder());
-			k.control(100, 0.1);
+			k.control(0, 0);
 			try {
 				Thread.sleep(1);
 			} catch (InterruptedException e) {

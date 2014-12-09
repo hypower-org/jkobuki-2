@@ -25,7 +25,7 @@ public class PacketParser {
 	
 	
 	public PacketParser() {
-		packet = ByteBuffer.allocate(200);  //Allocate 200 bytes just to be sure that we never overflow
+		packet = ByteBuffer.allocate(100);  //Allocate 200 bytes just to be sure that we never overflow
 		lastByte = 0;
 		state = State.EMPTY;
 	}
@@ -83,7 +83,13 @@ public class PacketParser {
 			case EMPTY:
 				
 				if(b == (byte) 0xAA) {
-					packet.put(b);
+					try {
+						packet.put(b);
+					} catch (Exception e) {
+						flush();
+						state = State.EMPTY;
+						return state;
+					}
 					state = State.HEADER;
 				} else {
 					state = State.EMPTY;
@@ -95,7 +101,13 @@ public class PacketParser {
 			case HEADER: 
 				
 				if(b == (byte) 0x55) {
-					packet.put(b);
+					try {
+						packet.put(b);
+					} catch (Exception e) {
+						flush();
+						state = State.EMPTY;
+						return state;
+					}
 					state = State.SIZE;
 				} else {
 					state = State.HEADER;
@@ -106,8 +118,14 @@ public class PacketParser {
 	
 			case SIZE:
 				
-				if(b > 0 && b < 200) {
-					packet.put(b);
+				if(b > 0 && b < 100) {
+					try {
+						packet.put(b);
+					} catch (Exception e) {
+						flush();
+						state = State.EMPTY;
+						return state;
+					}
 					length = b + 4; //Account for two headers, payload size, and checksum.
 					lastByte = b;
 					state = State.PARTIAL;
@@ -125,22 +143,40 @@ public class PacketParser {
 				if(lastByte == (byte) 0xAA && b == (byte) 0x55) {
 					byte temp = lastByte;
 					flush();
-					packet.put(temp);
-					packet.put(b);
+					try {
+						packet.put(temp);
+						packet.put(b);
+					} catch (Exception e) {
+						flush();
+						state = State.EMPTY;
+						return state;
+					}
 					state = State.SIZE;
 				} else {
 					
 					//If we haven't reached the number of bytes specified by the payload length...
 					
 					if(packet.position() < length) {
-						packet.put(b);
+						try {
+							packet.put(b);
+						} catch (Exception e) {
+							flush();
+							state = State.EMPTY;
+							return state;
+						}
 						lastByte = b;
 						state = State.PARTIAL;
 					} else {
 						
 						//We have a number of bytes equal to that we expected.  Check to see if the packet is valid.  If not, reset the state machine to empty.
 						
-						packet.put(b);
+						try {
+							packet.put(b);
+						} catch (Exception e) {
+							flush();
+							state = State.EMPTY;
+							return state;
+						}
 						if(validatePacket(length)) {
 							state = State.VALID;
 						} else {
