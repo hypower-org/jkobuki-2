@@ -109,6 +109,7 @@ public class PacketParser {
 				if(b > 0 && b < 200) {
 					packet.put(b);
 					length = b + 4; //Account for two headers, payload size, and checksum.
+					lastByte = b;
 					state = State.PARTIAL;
 				} else {
 					state = State.SIZE;
