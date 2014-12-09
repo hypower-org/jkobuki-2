@@ -39,6 +39,7 @@ public class SerialPortHandler implements SerialPortEventListener {
 			port.setParams(115200, 8, 1, 0);
 			port.setEventsMask(SerialPort.MASK_RXCHAR + SerialPort.MASK_CTS + SerialPort.MASK_DSR);
 			port.addEventListener(this);
+			System.out.println("Jkobuki connected to " + path);
 		} catch (SerialPortException e) {
 			System.err.println("Could not connect to supplied port");
 			e.printStackTrace();
@@ -96,7 +97,7 @@ public class SerialPortHandler implements SerialPortEventListener {
 				e.printStackTrace();
 			}
 		} else {
-			throw new IllegalArgumentException("Port must be connected before data can be received");
+			System.err.println("Port must be connected before data can be received");
 		}
 		
 		return null;
@@ -123,7 +124,7 @@ public class SerialPortHandler implements SerialPortEventListener {
 				}
 			}
 		} else {
-			throw new IllegalArgumentException("Port must be connected before data can be received");
+			System.err.println("Port must be connected before data can be received");
 		}
 		
 		return null;		

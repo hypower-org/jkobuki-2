@@ -47,16 +47,20 @@ public class KobukiRobot {
 			@Override
 			public Object call() throws Exception {
 				while(true) {
-					ByteBuffer b = handler.receive();
-					if(b != null) {
-						byte[] ba = b.array().clone();
-						for(int i = 0; i < ba.length; i++) {
-							if(parser.advance(ba[i]) == State.VALID) {
-								updateSensors(parser.getPacket());
+					try{
+						ByteBuffer b = handler.receive();
+						if(b != null) {
+							for(int i = 0; i < b.position(); i++) {
+								if(parser.advance(b.get(i)) == State.VALID) {
+									updateSensors(parser.getPacket());
+								}
 							}
+						} else {
+							//Nothing
 						}
-					} else {
-						//Nothing
+					} catch (Exception e) {
+						System.out.println("oops!");
+						e.printStackTrace();
 					}
 				}
 			}	
@@ -162,10 +166,10 @@ public class KobukiRobot {
 		
 		while(true) {
 			
-			//System.out.println(k.getLeftEncoder() + " and " + k.getRightEncoder());
-			k.control(0, 0);
+			System.out.println(k.getLeftEncoder() + " and " + k.getRightEncoder());
+			k.control(100, 0.1);
 			try {
-				Thread.sleep(50);
+				Thread.sleep(1);
 			} catch (InterruptedException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();

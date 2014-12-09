@@ -25,7 +25,7 @@ public class PacketParser {
 	
 	
 	public PacketParser() {
-		packet = ByteBuffer.allocate(100);  //Allocate 150 bytes just to be sure that we never overflow
+		packet = ByteBuffer.allocate(200);  //Allocate 200 bytes just to be sure that we never overflow
 		lastByte = 0;
 		state = State.EMPTY;
 	}
@@ -166,7 +166,13 @@ public class PacketParser {
 	 */
 	public byte[] getPacket() {
 		
-		byte[] b = packet.array().clone();
+		int length = packet.position();
+		
+		byte [] b = new byte[length];
+		
+		for(int i = length - 1; i >= 0; --i) {
+			b[i] = packet.get(i);
+		}
 		
 		flush();
 		
