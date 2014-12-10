@@ -8,8 +8,6 @@ package edu.ycp.robotics;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.locks.ReentrantLock;
-
 import jssc.SerialPort;
 import jssc.SerialPortEvent;
 import jssc.SerialPortEventListener;
