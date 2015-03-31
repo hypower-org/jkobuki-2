@@ -22,12 +22,16 @@ public class KobukiRobot {
 	private final Vector<Future<?>> tasks;
 	private final int MIN_UPDATE_PERIOD = 21; //in ms
 		
-	private final int WHEELBASE = 354; //in mm
+	private final int WHEELBASE = 230; //in mm
 	private int leftEncoder;
 	private int rightEncoder;
+	private int bumper;
+	private int button;
+	private int cliff;
+	private int battery;
 	
 	public KobukiRobot(String path) {
-		
+
 		Callable<Object> dataSender = new Callable<Object>() {
 
 			@Override
@@ -116,11 +120,25 @@ public class KobukiRobot {
 //		}
 //		
 //		System.out.println();
-		
+		bumper = b[7]; 
+		cliff = b[9];
 		leftEncoder = ((b[11] & 0xFF) << 8) | (b[10] & 0xFF);
 		rightEncoder = ((b[13] & 0xFF) << 8) | (b[12] & 0xFF);
+		button = b[16];
+		battery = b[18];
+		
 		
 //		System.out.println("ENCODERS: " + leftEncoder + " " + rightEncoder);
+	}
+	
+	public void setLed(int flag) { 
+		//PacketBuilder defines integer tags for leds
+		this.outgoing.add(ByteBuffer.wrap(PacketBuilder.ledPacket(flag))); 
+	}
+	
+	public void soundSequence(int sound) { 
+		//PacketBuilder defines integer tags for sounds
+		this.outgoing.add(ByteBuffer.wrap(PacketBuilder.soundSequencePacket(sound))); 
 	}
 	
 	public void baseControl(short velocity, short radius) throws IOException, InterruptedException { 	
@@ -158,18 +176,48 @@ public class KobukiRobot {
 		return leftEncoder;
 	}
 	
-	public static void main (String[] args) {
+	public int getBumper(){
+		return bumper;
+	}
+	
+	public int getButton() {
+		return button;
+	}
+	
+	public int getCliff() {
+		return cliff;
+	}
+	
+	public int getBattery() {
+		return battery;
+	}
+	
+	public static void main (String[] args) throws InterruptedException {
 		
 		//Small test to make sure everything important is working!
 		
 		KobukiRobot k = new KobukiRobot("/dev/ttyUSB0");
 		
+		Thread.sleep(3000);
+		
+//		k.soundSequence(0);
+//		
+//		k.setLed(1);
+//		Thread.sleep(1000);
+//		k.setLed(2);
+//		Thread.sleep(1000);
+//		k.setLed(3);
+//		Thread.sleep(1000);
+//		k.setLed(4);
+//		k.setLed(0);
+		
 		while(true) {
 			
-			System.out.println(k.getLeftEncoder() + " and " + k.getRightEncoder());
-			k.control(0, 0);
+			System.out.println("button: " + k.getButton());
+			System.out.println("cliff: " + k.getCliff());
+			System.out.println("battery: " + k.getBattery());
 			try {
-				Thread.sleep(1);
+				Thread.sleep(1000);
 			} catch (InterruptedException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
