@@ -16,19 +16,21 @@ import jssc.SerialPortException;
 public class SerialPortHandler implements SerialPortEventListener {
 	
 	private SerialPort port;
-	private final LinkedBlockingQueue<ByteBuffer> incoming;
-	private int capacity;
+	private final LinkedBlockingQueue<ByteBuffer> incomingBytes;
+	private final int capacity;
+	private boolean isStopRequested;
 	
-	public SerialPortHandler() {
-		incoming = new LinkedBlockingQueue<ByteBuffer>();
+	public SerialPortHandler(String path) {
+		incomingBytes = new LinkedBlockingQueue<ByteBuffer>();
 		capacity = 2048;
+		this.connect(path);
 	}
 	
 	/**
 	 * 
 	 * @param path The device path to which the serial port will be connected.
 	 */
-	public final void connect(String path) {
+	private final void connect(String path) {
 		
 		port = new SerialPort(path);
 		
@@ -44,13 +46,19 @@ public class SerialPortHandler implements SerialPortEventListener {
 		}
 	}
 
+	/**
+	 * Method that performs the proper shutdown to the serial port and shared bytebuffer queue.
+	 */
+	public final void shutdown(){
+		
+	}
+	
 	@Override
 	public final void serialEvent(SerialPortEvent e) {
 		
 		int inputSize = 0;
 		
 		//Ensure that we can read what's on the line
-		
 		if(e.isRXCHAR()) {			
 			inputSize = e.getEventValue();	
 			ByteBuffer b = ByteBuffer.allocate(inputSize);
@@ -59,13 +67,11 @@ public class SerialPortHandler implements SerialPortEventListener {
 				b.put(port.readBytes(inputSize));
 				
 				try {
-					
 					//If we're maxed out, don't put anything else in the buffer
-					
-					if(incoming.size() > capacity) {
+					if(incomingBytes.size() > capacity) {
 						System.err.println("Incoming queue capacity exceeded!  No more data will be received");
 					} else {
-						incoming.put(b);
+						incomingBytes.put(b);
 					}
 				} catch (InterruptedException e1) {
 					System.err.println("Could not read from the serial port");
@@ -83,14 +89,13 @@ public class SerialPortHandler implements SerialPortEventListener {
 	 * 
 	 * @return The serial port data in a ByteBuffer.
 	 */
-	public final ByteBuffer receive() {
+	public final ByteBuffer receiveBytes() {
 		
 		//If we're actually connected to a serial port, take a value
-		
+		// TODO: add a poison pill if serial port is supposed to shutdown
 		if(port != null) {			
-			
 			try {
-				return incoming.take();
+				return incomingBytes.take();
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
@@ -122,13 +127,6 @@ public class SerialPortHandler implements SerialPortEventListener {
 		}	
 	}
 
-	public int getCapacity() {
-		return capacity;
-	}
-
-	public void setCapacity(int Capacity) {
-		capacity = Capacity;
-	}
 }
 
 

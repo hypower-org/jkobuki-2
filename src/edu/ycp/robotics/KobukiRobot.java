@@ -16,7 +16,7 @@ public class KobukiRobot {
 	
 	private boolean isStopRequested = false;
 	private final PacketParser parser = new PacketParser();
-	private final SerialPortHandler handler = new SerialPortHandler();
+	private final SerialPortHandler serialPortHandler;
 	private final LinkedBlockingQueue<ByteBuffer> outgoing = new LinkedBlockingQueue<ByteBuffer>();
 	private final ScheduledExecutorService executor;
 	private final Vector<Future<?>> tasks;
@@ -32,13 +32,15 @@ public class KobukiRobot {
 	
 	public KobukiRobot(String path) {
 
+		serialPortHandler = new SerialPortHandler(path);
+		
 		Runnable dataSender = new Runnable(){
 
 			@Override
 			public void run() {
 				while(true) {
 					try {
-						handler.send(outgoing.take());
+						serialPortHandler.send(outgoing.take());
 					} catch (InterruptedException e) {
 						e.printStackTrace();
 					}
@@ -67,7 +69,8 @@ public class KobukiRobot {
 			public void run() {
 				while(true) {
 					try{
-						ByteBuffer b = handler.receive();
+						//TODO: add a poison pill byte message for proper shutdown
+						ByteBuffer b = serialPortHandler.receiveBytes();
 						if(b != null) {
 							for(int i = 0; i < b.position(); i++) {
 								if(parser.advance(b.get(i)) == State.VALID) {
@@ -121,12 +124,14 @@ public class KobukiRobot {
 						// Sleep a bit before killing the running tasks.
 						Thread.sleep(3*MIN_UPDATE_PERIOD);
 						
-						//TODO: tell serial port handler to shut down
+						//TODO: tell serial port handler to shut down; wait on new flag for dataReceiver completion
 						
 					} catch (IOException | InterruptedException e) {
 						e.printStackTrace();
 					}
-					for(Future<?> currTask : tasks) {  //Properly ends/shuts down all currently active threads
+					
+					// Clean out all tasks from the Executor
+					for(Future<?> currTask : tasks) {
 						currTask.cancel(true); 
 					}	
 					executor.shutdown();
@@ -139,8 +144,6 @@ public class KobukiRobot {
 				}			
 			}									
 		};
-		
-		handler.connect(path);
 		
 		executor = Executors.newScheduledThreadPool(3);
 		tasks = new Vector<Future<?>>();
