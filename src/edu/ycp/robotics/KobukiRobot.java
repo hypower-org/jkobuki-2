@@ -49,20 +49,6 @@ public class KobukiRobot {
 			
 		};
 		
-//		Callable<Object> dataSender = new Callable<Object>() {
-//
-//			@Override
-//			public Object call() throws Exception {
-//				while(true) {
-//					try {
-//						handler.send(outgoing.take());
-//					} catch (InterruptedException e) {
-//						e.printStackTrace();
-//					}
-//				}
-//			}		
-//		};
-		
 		Runnable dataReceiver = new Runnable(){
 
 			@Override
@@ -86,30 +72,6 @@ public class KobukiRobot {
 				}
 			}
 		};
-		
-//		Callable<Object> dataReceiver = new Callable<Object>() {
-//
-//			@Override
-//			public Object call() throws Exception {
-//				while(true) {
-//					try{
-//						ByteBuffer b = handler.receive();
-//						if(b != null) {
-//							for(int i = 0; i < b.position(); i++) {
-//								if(parser.advance(b.get(i)) == State.VALID) {
-//									updateSensors(parser.getPacket());
-//								}
-//							}
-//						} else {
-//							//Nothing
-//						}
-//					} catch (Exception e) {
-//						System.out.println("oops!");
-//						e.printStackTrace();
-//					}
-//				}
-//			}	
-//		};
 		
 		Runnable kobukiThreadManager = new Runnable() {
 			
