@@ -14,7 +14,7 @@ import edu.ycp.robotics.PacketParser.State;
 
 public class KobukiRobot {
 	
-	private boolean stop = false;
+	private boolean isStopRequested = false;
 	private final PacketParser parser = new PacketParser();
 	private final SerialPortHandler handler = new SerialPortHandler();
 	private final LinkedBlockingQueue<ByteBuffer> outgoing = new LinkedBlockingQueue<ByteBuffer>();
@@ -32,10 +32,10 @@ public class KobukiRobot {
 	
 	public KobukiRobot(String path) {
 
-		Callable<Object> dataSender = new Callable<Object>() {
+		Runnable dataSender = new Runnable(){
 
 			@Override
-			public Object call() throws Exception {
+			public void run() {
 				while(true) {
 					try {
 						handler.send(outgoing.take());
@@ -43,13 +43,28 @@ public class KobukiRobot {
 						e.printStackTrace();
 					}
 				}
-			}		
+			}
+			
 		};
 		
-		Callable<Object> dataReceiver = new Callable<Object>() {
+//		Callable<Object> dataSender = new Callable<Object>() {
+//
+//			@Override
+//			public Object call() throws Exception {
+//				while(true) {
+//					try {
+//						handler.send(outgoing.take());
+//					} catch (InterruptedException e) {
+//						e.printStackTrace();
+//					}
+//				}
+//			}		
+//		};
+		
+		Runnable dataReceiver = new Runnable(){
 
 			@Override
-			public Object call() throws Exception {
+			public void run() {
 				while(true) {
 					try{
 						ByteBuffer b = handler.receive();
@@ -63,25 +78,51 @@ public class KobukiRobot {
 							//Nothing
 						}
 					} catch (Exception e) {
-						System.out.println("oops!");
 						e.printStackTrace();
 					}
 				}
-			}	
+			}
 		};
+		
+//		Callable<Object> dataReceiver = new Callable<Object>() {
+//
+//			@Override
+//			public Object call() throws Exception {
+//				while(true) {
+//					try{
+//						ByteBuffer b = handler.receive();
+//						if(b != null) {
+//							for(int i = 0; i < b.position(); i++) {
+//								if(parser.advance(b.get(i)) == State.VALID) {
+//									updateSensors(parser.getPacket());
+//								}
+//							}
+//						} else {
+//							//Nothing
+//						}
+//					} catch (Exception e) {
+//						System.out.println("oops!");
+//						e.printStackTrace();
+//					}
+//				}
+//			}	
+//		};
 		
 		Runnable kobukiThreadManager = new Runnable() {
 			
 			@Override
 			public void run() {
 				
-				if(stop) {	
+				if(isStopRequested) {	
 					System.out.println("Shutting down the KobukiRobot.");
 					try {
 						baseControl((short) 0, (short) 0);
 						
 						// Sleep a bit before killing the running tasks.
 						Thread.sleep(3*MIN_UPDATE_PERIOD);
+						
+						//TODO: tell serial port handler to shut down
+						
 					} catch (IOException | InterruptedException e) {
 						e.printStackTrace();
 					}
@@ -109,8 +150,8 @@ public class KobukiRobot {
 		tasks.add(executor.scheduleAtFixedRate(kobukiThreadManager, 0, MIN_UPDATE_PERIOD, TimeUnit.MILLISECONDS));
 	}
 	
-	public void stop() {
-		stop = true;
+	public void requestSystemStop() {
+		isStopRequested = true;
 	}
 	
 	private void updateSensors(byte[] b) {

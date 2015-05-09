@@ -102,33 +102,6 @@ public class SerialPortHandler implements SerialPortEventListener {
 	}
 	
 	/** 
-	 * Receives a ByteBuffer from an internal LinkedBlockingQueue.  WILL NOT BLOCK IF DATA IS UNAVAILABLE.
-	 * 
-	 * @return The serial port data in a ByteBuffer.
-	 */
-	public final ByteBuffer receiveNB() {
-		
-		//Check to see if the buffer has anything in it before taking, avoids blocking 
-		
-		if(port != null) {	//Port isn't opened yet
-			
-			if (incoming.isEmpty()) {
-				return null;			
-			} else {
-				try {
-					return incoming.take();
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-			}
-		} else {
-			System.err.println("Port must be connected before data can be received");
-		}
-		
-		return null;		
-	}
-	
-	/** 
 	 * Puts data onto the serial port.
 	 * 
 	 * @param q The queue from which data will be taken
