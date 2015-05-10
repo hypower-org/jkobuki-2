@@ -3,21 +3,25 @@ package edu.ycp.robotics;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Vector;
-import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import java.util.Random;
+
 import edu.ycp.robotics.PacketParser.State;
 
 public class KobukiRobot {
 	
-	private boolean isStopRequested = false;
+	private volatile boolean isStopRequested = false;
+	private volatile boolean isDataReceiverTerminated = false;
 	private final PacketParser parser = new PacketParser();
 	private final SerialPortHandler serialPortHandler;
 	private final LinkedBlockingQueue<ByteBuffer> outgoing = new LinkedBlockingQueue<ByteBuffer>();
+	private final byte[] poisonPillMsg;
+	
 	private final ScheduledExecutorService executor;
 	private final Vector<Future<?>> tasks;
 	private final int MIN_UPDATE_PERIOD = 21; //in ms
@@ -32,7 +36,11 @@ public class KobukiRobot {
 	
 	public KobukiRobot(String path) {
 
-		serialPortHandler = new SerialPortHandler(path);
+		// generate the poison pill message:
+		final byte ppByte = (byte) new Random().nextInt(127);
+		poisonPillMsg = new byte[] {-1, ppByte, (byte) 0x21};
+		
+		serialPortHandler = new SerialPortHandler(path, poisonPillMsg);
 		
 		Runnable dataSender = new Runnable(){
 
@@ -53,23 +61,29 @@ public class KobukiRobot {
 
 			@Override
 			public void run() {
-				while(true) {
+				while(!isDataReceiverTerminated) {
 					try{
-						//TODO: add a poison pill byte message for proper shutdown
 						ByteBuffer b = serialPortHandler.receiveBytes();
 						if(b != null) {
-							for(int i = 0; i < b.position(); i++) {
-								if(parser.advance(b.get(i)) == State.VALID) {
-									updateSensors(parser.getPacket());
+							// check for poison pill
+							if(b.get(0) == -1 && b.get(1) == ppByte && b.get(2) == (byte) 0x21){
+								System.out.println("Received poison pill. Terminating dataReceiver...");
+								isDataReceiverTerminated = true;
+							}
+							// otherwise process new buffer of data
+							else {
+								for(int i = 0; i < b.position(); i++) {
+									if(parser.advance(b.get(i)) == State.VALID) {
+										updateSensors(parser.getPacket());
+									}
 								}
 							}
-						} else {
-							//Nothing
 						}
 					} catch (Exception e) {
 						e.printStackTrace();
 					}
 				}
+				System.out.println("dataReceiver terminated.");
 			}
 		};
 		

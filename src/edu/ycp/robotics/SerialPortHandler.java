@@ -8,6 +8,7 @@ package edu.ycp.robotics;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.LinkedBlockingQueue;
+
 import jssc.SerialPort;
 import jssc.SerialPortEvent;
 import jssc.SerialPortEventListener;
@@ -18,11 +19,16 @@ public class SerialPortHandler implements SerialPortEventListener {
 	private SerialPort port;
 	private final LinkedBlockingQueue<ByteBuffer> incomingBytes;
 	private final int capacity;
-	private boolean isStopRequested;
+	private volatile boolean isStopRequested;
 	
-	public SerialPortHandler(String path) {
+	private final byte[] poisonPill;
+	
+	public SerialPortHandler(String path, byte[] pp) {
 		incomingBytes = new LinkedBlockingQueue<ByteBuffer>();
 		capacity = 2048;
+		
+		poisonPill = pp;
+		
 		this.connect(path);
 	}
 	
@@ -50,7 +56,17 @@ public class SerialPortHandler implements SerialPortEventListener {
 	 * Method that performs the proper shutdown to the serial port and shared bytebuffer queue.
 	 */
 	public final void shutdown(){
+		// TODO: disconnect from serial port
 		
+		
+		// Insert poison pill into the blocking ByteBuffer stream.
+		ByteBuffer ppBuf = ByteBuffer.allocate(poisonPill.length);
+		ppBuf.put(poisonPill);
+		try {
+			incomingBytes.put(ppBuf);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
 	}
 	
 	@Override
@@ -85,7 +101,7 @@ public class SerialPortHandler implements SerialPortEventListener {
 	}
 	
 	/**
-	 * Receives a ByteBuffer from an internal LinkedBlockingQueue.  WILL BLOCK IF DATA IS UNAVAILABLE.
+	 * Receives a ByteBuffer from an internal LinkedBlockingQueue. WILL BLOCK IF DATA IS UNAVAILABLE.
 	 * 
 	 * @return The serial port data in a ByteBuffer.
 	 */
