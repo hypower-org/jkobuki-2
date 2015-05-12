@@ -1,3 +1,9 @@
+/*
+	Copyright (c) 2015 - York College of Pennsylvania, Paul Glotfelter, Patrick Martin
+	The MIT License
+	See license.txt for details.
+*/
+
 package edu.ycp.robotics;
 
 import java.io.IOException;
@@ -46,11 +52,12 @@ public class KobukiRobot {
 
 			@Override
 			public void run() {
-				while(true) {
+				boolean isInterrupted = false;
+				while(!isInterrupted) {
 					try {
 						serialPortHandler.send(outgoing.take());
 					} catch (InterruptedException e) {
-						e.printStackTrace();
+						isInterrupted = true;
 					}
 				}
 			}
@@ -67,7 +74,6 @@ public class KobukiRobot {
 						if(b != null) {
 							// check for poison pill
 							if(b.get(0) == -1 && b.get(1) == ppByte && b.get(2) == (byte) 0x21){
-								System.out.println("Received poison pill. Terminating dataReceiver...");
 								isDataReceiverTerminated = true;
 							}
 							// otherwise process new buffer of data
@@ -83,7 +89,6 @@ public class KobukiRobot {
 						e.printStackTrace();
 					}
 				}
-				System.out.println("dataReceiver terminated.");
 			}
 		};
 		
@@ -93,14 +98,17 @@ public class KobukiRobot {
 			public void run() {
 				
 				if(isStopRequested) {	
-					System.out.println("Shutting down the KobukiRobot.");
+					System.out.println("Shutting down the KobukiRobot...");
 					try {
 						baseControl((short) 0, (short) 0);
 						
 						// Sleep a bit before killing the running tasks.
 						Thread.sleep(3*MIN_UPDATE_PERIOD);
 						
-						//TODO: tell serial port handler to shut down; wait on new flag for dataReceiver completion
+						serialPortHandler.shutdown();
+						
+						// Wait until the dataReceiver runnable is terminated.
+						while(!isDataReceiverTerminated);
 						
 					} catch (IOException | InterruptedException e) {
 						e.printStackTrace();
@@ -111,6 +119,8 @@ public class KobukiRobot {
 						currTask.cancel(true); 
 					}	
 					executor.shutdown();
+					
+					System.out.println("KobukiRobot shutdown.");
 				} else {
 					try {
 						Thread.sleep(MIN_UPDATE_PERIOD);
@@ -135,11 +145,6 @@ public class KobukiRobot {
 	
 	private void updateSensors(byte[] b) {
 		
-//		for(int i = 0; i < b.length; i++) {
-//			System.out.print(b[i] + " ");
-//		}
-//		
-//		System.out.println();
 		bumper = b[7]; 
 		cliff = b[9];
 		leftEncoder = ((b[11] & 0xFF) << 8) | (b[10] & 0xFF);
@@ -147,8 +152,6 @@ public class KobukiRobot {
 		button = b[16];
 		battery = b[18];
 		
-		
-//		System.out.println("ENCODERS: " + leftEncoder + " " + rightEncoder);
 	}
 	
 	public void setLed(int flag) { 
@@ -218,7 +221,18 @@ public class KobukiRobot {
 		
 		KobukiRobot k = new KobukiRobot("/dev/ttyUSB0");
 		
-		Thread.sleep(3000);
+		Thread.sleep(1000);
+		
+		try {
+			k.baseControl((short) 100, (short) 0);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		Thread.sleep(2000);
+
+		k.requestSystemStop();
 		
 //		k.soundSequence(0);
 //		
@@ -231,18 +245,18 @@ public class KobukiRobot {
 //		k.setLed(4);
 //		k.setLed(0);
 		
-		while(true) {
-			
-			System.out.println("button: " + k.getButton());
-			System.out.println("cliff: " + k.getCliff());
-			System.out.println("battery: " + k.getBattery());
-			try {
-				Thread.sleep(1000);
-			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-		}
+//		while(true) {
+//			
+//			System.out.println("button: " + k.getButton());
+//			System.out.println("cliff: " + k.getCliff());
+//			System.out.println("battery: " + k.getBattery());
+//			try {
+//				Thread.sleep(1000);
+//			} catch (InterruptedException e) {
+//				// TODO Auto-generated catch block
+//				e.printStackTrace();
+//			}
+//		}
 	}
 }
 

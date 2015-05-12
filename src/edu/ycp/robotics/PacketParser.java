@@ -1,3 +1,9 @@
+/*
+	Copyright (c) 2015 - York College of Pennsylvania, Paul Glotfelter, Patrick Martin
+	The MIT License
+	See license.txt for details.
+*/
+
 package edu.ycp.robotics;
 
 import java.nio.ByteBuffer;

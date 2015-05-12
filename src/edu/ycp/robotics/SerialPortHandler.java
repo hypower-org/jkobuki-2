@@ -1,5 +1,5 @@
 /*
-	Copyright (c) 2013 - York College of Pennsylvania, Paul Glotfelter
+	Copyright (c) 2015 - York College of Pennsylvania, Paul Glotfelter, Patrick Martin
 	The MIT License
 	See license.txt for details.
 */
@@ -16,10 +16,9 @@ import jssc.SerialPortException;
 
 public class SerialPortHandler implements SerialPortEventListener {
 	
-	private SerialPort port;
+	private SerialPort serialPort;
 	private final LinkedBlockingQueue<ByteBuffer> incomingBytes;
 	private final int capacity;
-	private volatile boolean isStopRequested;
 	
 	private final byte[] poisonPill;
 	
@@ -38,13 +37,13 @@ public class SerialPortHandler implements SerialPortEventListener {
 	 */
 	private final void connect(String path) {
 		
-		port = new SerialPort(path);
+		serialPort = new SerialPort(path);
 		
 		try {
-			port.openPort();
-			port.setParams(115200, 8, 1, 0);
-			port.setEventsMask(SerialPort.MASK_RXCHAR + SerialPort.MASK_CTS + SerialPort.MASK_DSR);
-			port.addEventListener(this);
+			serialPort.openPort();
+			serialPort.setParams(115200, 8, 1, 0);
+			serialPort.setEventsMask(SerialPort.MASK_RXCHAR + SerialPort.MASK_CTS + SerialPort.MASK_DSR);
+			serialPort.addEventListener(this);
 			System.out.println("Jkobuki connected to " + path);
 		} catch (SerialPortException e) {
 			System.err.println("Could not connect to supplied port");
@@ -56,9 +55,13 @@ public class SerialPortHandler implements SerialPortEventListener {
 	 * Method that performs the proper shutdown to the serial port and shared bytebuffer queue.
 	 */
 	public final void shutdown(){
-		// TODO: disconnect from serial port
 		
-		
+		try {
+			serialPort.removeEventListener();
+			serialPort.closePort();
+		} catch (SerialPortException e1) {
+			e1.printStackTrace();
+		}
 		// Insert poison pill into the blocking ByteBuffer stream.
 		ByteBuffer ppBuf = ByteBuffer.allocate(poisonPill.length);
 		ppBuf.put(poisonPill);
@@ -80,7 +83,7 @@ public class SerialPortHandler implements SerialPortEventListener {
 			ByteBuffer b = ByteBuffer.allocate(inputSize);
 			
 			try {
-				b.put(port.readBytes(inputSize));
+				b.put(serialPort.readBytes(inputSize));
 				
 				try {
 					//If we're maxed out, don't put anything else in the buffer
@@ -108,8 +111,7 @@ public class SerialPortHandler implements SerialPortEventListener {
 	public final ByteBuffer receiveBytes() {
 		
 		//If we're actually connected to a serial port, take a value
-		// TODO: add a poison pill if serial port is supposed to shutdown
-		if(port != null) {			
+		if(serialPort != null) {			
 			try {
 				return incomingBytes.take();
 			} catch (InterruptedException e) {
@@ -131,9 +133,9 @@ public class SerialPortHandler implements SerialPortEventListener {
 		
 		//If the port is valid, write an array of bytes to the serial port
 		
-		if(port != null) {
+		if(serialPort != null) {
 			try {
-				port.writeBytes(q.array());
+				serialPort.writeBytes(q.array());
 			} catch (SerialPortException e) {
 				System.err.println("There was an error writing to the serial port");
 				e.printStackTrace();
