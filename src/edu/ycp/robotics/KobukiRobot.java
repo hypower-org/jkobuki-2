@@ -8,13 +8,9 @@ package edu.ycp.robotics;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Vector;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.Random;
 
 import edu.ycp.robotics.PacketParser.State;
@@ -28,8 +24,7 @@ public class KobukiRobot {
 	private final LinkedBlockingQueue<ByteBuffer> outgoing = new LinkedBlockingQueue<ByteBuffer>();
 	private final byte[] poisonPillMsg;
 	
-	private final ScheduledExecutorService executor;
-	private final Vector<Future<?>> tasks;
+	private final ThreadPoolExecutor poolService;
 	private final int MIN_UPDATE_PERIOD = 21; //in ms
 		
 	private final int WHEELBASE = 230; //in mm
@@ -97,46 +92,44 @@ public class KobukiRobot {
 			@Override
 			public void run() {
 				
-				if(isStopRequested) {	
-					System.out.println("Shutting down the KobukiRobot...");
-					try {
-						baseControl((short) 0, (short) 0);
+				while(true){
+					if(isStopRequested) {	
+						System.out.println("Shutting down the KobukiRobot...");
+						try {
+							baseControl((short) 0, (short) 0);
+							
+							// Sleep a bit before killing the running tasks.
+							Thread.sleep(3*MIN_UPDATE_PERIOD);
+							
+							serialPortHandler.shutdown();
+							
+							// Wait until the dataReceiver runnable is terminated.
+							while(!isDataReceiverTerminated);
+							
+						} catch (IOException | InterruptedException e) {
+							e.printStackTrace();
+						}
+
+						poolService.shutdownNow();
 						
-						// Sleep a bit before killing the running tasks.
-						Thread.sleep(3*MIN_UPDATE_PERIOD);
-						
-						serialPortHandler.shutdown();
-						
-						// Wait until the dataReceiver runnable is terminated.
-						while(!isDataReceiverTerminated);
-						
-					} catch (IOException | InterruptedException e) {
-						e.printStackTrace();
+						System.out.println("KobukiRobot shutdown.");
+						return;
+					} else {
+						try {
+							Thread.sleep(MIN_UPDATE_PERIOD);
+						} catch (InterruptedException e) {
+							Thread.currentThread().interrupt(); 
+						}
 					}
-					
-					// Clean out all tasks from the Executor
-					for(Future<?> currTask : tasks) {
-						currTask.cancel(true); 
-					}	
-					executor.shutdown();
-					
-					System.out.println("KobukiRobot shutdown.");
-				} else {
-					try {
-						Thread.sleep(MIN_UPDATE_PERIOD);
-					} catch (InterruptedException e) {
-						Thread.currentThread().interrupt(); 
-					}
-				}			
+				}
 			}									
 		};
 		
-		executor = Executors.newScheduledThreadPool(3);
-		tasks = new Vector<Future<?>>();
+		poolService = (ThreadPoolExecutor) Executors.newFixedThreadPool(3);
 		
-		tasks.add(executor.schedule(dataSender, 0, TimeUnit.MILLISECONDS));
-		tasks.add(executor.schedule(dataReceiver, 0, TimeUnit.MILLISECONDS));
-		tasks.add(executor.scheduleAtFixedRate(kobukiThreadManager, 0, MIN_UPDATE_PERIOD, TimeUnit.MILLISECONDS));
+		poolService.execute(dataSender);
+		poolService.execute(dataReceiver);
+		poolService.execute(kobukiThreadManager);
 	}
 	
 	public void requestSystemStop() {
@@ -217,46 +210,43 @@ public class KobukiRobot {
 	
 	public static void main (String[] args) throws InterruptedException {
 		
-		//Small test to make sure everything important is working!
-		
+		//Small test to make sure everything important is working!		
 		KobukiRobot k = new KobukiRobot("/dev/ttyUSB0");
+		int idx = 0;
 		
 		Thread.sleep(1000);
 		
-		try {
-			k.baseControl((short) 100, (short) 0);
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+		k.soundSequence(0);
+		
+		k.setLed(1);
+		Thread.sleep(1000);
+		k.setLed(2);
+		Thread.sleep(1000);
+		k.setLed(3);
+		Thread.sleep(1000);
+		k.setLed(4);
+		k.setLed(0);
+		
+		while(idx < 5) {
+			
+			System.out.println("button: " + k.getButton());
+			System.out.println("cliff: " + k.getCliff());
+			System.out.println("battery: " + k.getBattery());
+			try {
+				k.baseControl((short) 100, (short) 0);
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
+			try {
+				Thread.sleep(1000);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+			idx++;
 		}
 
-		Thread.sleep(2000);
-
 		k.requestSystemStop();
-		
-//		k.soundSequence(0);
-//		
-//		k.setLed(1);
-//		Thread.sleep(1000);
-//		k.setLed(2);
-//		Thread.sleep(1000);
-//		k.setLed(3);
-//		Thread.sleep(1000);
-//		k.setLed(4);
-//		k.setLed(0);
-		
-//		while(true) {
-//			
-//			System.out.println("button: " + k.getButton());
-//			System.out.println("cliff: " + k.getCliff());
-//			System.out.println("battery: " + k.getBattery());
-//			try {
-//				Thread.sleep(1000);
-//			} catch (InterruptedException e) {
-//				// TODO Auto-generated catch block
-//				e.printStackTrace();
-//			}
-//		}
+
 	}
 }
 
